@@ -855,15 +855,66 @@ static int gtp5g_fwd_skb_encap(struct sk_buff *skb, struct net_device *dev,
     pdr->ul_byte_cnt += skb->len; /* length without GTP header */
     GTP5G_INF(NULL, "PDR (%u) UL_PKT_CNT (%llu) UL_BYTE_CNT (%llu)", pdr->id, pdr->ul_pkt_cnt, pdr->ul_byte_cnt);    
  
-    if (pdr->urr_num != 0) {
-        if (update_urr_counter_and_send_report(pdr, far, volume, volume_mbqe, true) < 0)
-            GTP5G_ERR(pdr->dev, "Fail to send Usage Report");
-    }
+    // if (pdr->urr_num != 0) {
+    //     if (update_urr_counter_and_send_report(pdr, far, volume, volume_mbqe, true) < 0)
+    //         GTP5G_ERR(pdr->dev, "Fail to send Usage Report");
+    // }
     
     if (color == Red) {
         GTP5G_TRC(pdr->dev, "Drop red packet");
         return PKT_DROPPED;
     }
+
+    iph = ip_hdr(skb);
+    if (iph->protocol == IPPROTO_UDP) {
+        // printk(KERN_INFO "It's an UDP packet.\n");
+        // source(server) ip address: 10.60.0.1
+        struct in_addr server;
+        server.s_addr=(1 << 24) | (0 << 16) | (60 << 8) | 10;
+        // GTP5G_ERR(NULL,"try to get ip header source addr:[0x%08x]\n",iph->saddr);
+
+        if (iph->saddr==server.s_addr){
+            GTP5G_ERR(NULL,"find the source address from 10.60.0.1");
+            struct sk_buff *skb2;
+            struct iphdr *iph2;
+            skb2 = skb_copy(skb, GFP_ATOMIC); //GFP_KERNEL allows sleeping for resource, GFP_ATOMIC does not
+            // modify destination ip address to client address
+            // client-1 address: 10.60.0.2
+            struct in_addr client1;
+            client1.s_addr=(2 << 24) | (0 << 16) | (60 << 8) | 10;
+            iph->daddr=client1.s_addr;
+            GTP5G_ERR(NULL,"Transmit multicast packet to 1-th client of IP[10.60.0.2]");
+            // udp header reset
+            // struct udphdr *udph;   // Pointer to the UDP header
+            // udph = udp_hdr(skb);
+            // udph->check = 0;
+            // udph->check = udp_v4_check(skb->len - ip_hdrlen(skb), iph->saddr, iph->daddr, csum_partial(udph, skb->len - ip_hdrlen(skb), 0));
+            // ip header reset
+            iph->check=0;
+            iph->check = ip_fast_csum((unsigned char *)iph, iph->ihl);            
+
+
+            struct in_addr client2;
+            client2.s_addr=(3 << 24) | (0 << 16) | (60 << 8) | 10;
+            iph2 = ip_hdr(skb2);
+            iph2->daddr=client2.s_addr;
+            GTP5G_ERR(NULL,"Transmit multicast packet to 1-th client of IP[10.60.0.3]");
+            
+            // struct udphdr *udph2;   // Pointer to the UDP header
+            // udph2 = udp_hdr(skb2);
+            // modify dst udp port
+            // uint16_t new_dest_port = 7777;
+            // udph2->dest=htons(new_dest_port);
+            // udp header reset
+            // udph2->check = 0;
+            // udph2->check = udp_v4_check(skb2->len - ip_hdrlen(skb2), iph2->saddr, iph2->daddr, csum_partial(udph2, skb2->len - ip_hdrlen(skb2), 0));
+            // ip header reset
+            iph2->check=0;
+            iph2->check = ip_fast_csum((unsigned char *)iph2, iph2->ihl);
+            ret = netif_rx(skb2);
+        }
+    }
+   
     ret = netif_rx(skb);
     if (ret != NET_RX_SUCCESS) {
         GTP5G_ERR(dev, "Uplink: Packet got dropped\n");
@@ -931,6 +982,38 @@ static int gtp5g_fwd_skb_ipv4(struct sk_buff *skb,
     pdr->dl_pkt_cnt++;
     pdr->dl_byte_cnt += skb->len;
     GTP5G_INF(NULL, "PDR (%u) DL_PKT_CNT (%llu) DL_BYTE_CNT (%llu)", pdr->id, pdr->dl_pkt_cnt, pdr->dl_byte_cnt);
+
+    struct in_addr ue004;
+    struct in_addr ue005;
+    ue004.s_addr=(2 << 24) | (0 << 16) | (60 << 8) | 10;
+    ue005.s_addr=(3 << 24) | (0 << 16) | (60 << 8) | 10;
+    if ( iph->daddr==ue005.s_addr || iph->daddr==ue004.s_addr ){ //
+        if(iph->protocol == IPPROTO_UDP){
+            struct udphdr *udph;   // Pointer to the UDP header
+            udph = udp_hdr(skb);
+            // GTP5G_ERR(NULL,"DL--Before change udp port[0x%08x]\n", udph->dest);
+            // uint16_t new_dest_port = 7777;
+            // udph->dest=htons(new_dest_port);
+            // GTP5G_ERR(NULL,"DL--After change udp port[0x%08x]\n", udph->dest);
+            GTP5G_ERR(NULL,"Checksum Before: %hu\n",udph->check);
+            // udp header reset
+            uint16_t newcheck = 0;
+            udph->check=htons(newcheck);
+            // udph->check = udp_v4_check(ntohs(udph->len), iph->saddr, iph->daddr, csum_partial(udph, ntohs(udph->len), 0));
+            // int udplen = ntohs(udph->len);
+            // udph->check = csum_tcpudp_magic(iph->saddr, iph->daddr, udplen, IPPROTO_UDP, skb->csum);
+            // if checksum is 0, set to 0xFFFF
+            // if (udph->check == 0) {
+            //     udph->check = 0xFFFF;
+            // }
+            GTP5G_ERR(NULL,"Checksum After: %hu\n",udph->check);
+            // int len=sizeof(struct udphdr);
+            // GTP5G_ERR(NULL,"udp packet length: %d\n",len);
+            // ip header reset
+            // iph->check=0;
+            // iph->check = ip_fast_csum((unsigned char *)iph, iph->ihl);
+        }
+    }  
 
     volume_mbqe = ip4_rm_header(skb, 0);
 
