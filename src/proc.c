@@ -21,6 +21,7 @@ struct proc_gtp5g_pdr {
     u32     pdi_ue_addr4;
     u32     pdi_fteid;
     u32     pdi_gtpu_addr4;
+    u32     pdi_mulcst_igmp_addr4;
     
     u32     far_id;
     u32     *qer_ids;
@@ -176,6 +177,7 @@ static int gtp5g_pdr_read(struct seq_file *s, void *v)
 {
     char role_addr[35];
     char pdi_ue_addr[35];
+    char pdi_mulcst_igmp_addr[35];
     char pdu_gtpu_addr[35];
     char pdr_qer_ids[64];
     char pdr_urr_ids[64];
@@ -195,6 +197,8 @@ static int gtp5g_pdr_read(struct seq_file *s, void *v)
     ip_string(pdi_ue_addr, proc_pdr.pdi_ue_addr4);
     seq_printf(s, "\t PDI UE Addr4: %s(%#08x)\n", pdi_ue_addr, ntohl(proc_pdr.pdi_ue_addr4));
     seq_printf(s, "\t PDI TEID: %#08x\n", ntohl(proc_pdr.pdi_fteid));
+    ip_string(pdi_mulcst_igmp_addr, proc_pdr.pdi_mulcst_igmp_addr4);
+    seq_printf(s, "\t PDI Multicast IGMP Addr4: %s(%#08x)\n", pdi_mulcst_igmp_addr, ntohl(proc_pdr.pdi_mulcst_igmp_addr4));
     ip_string(pdu_gtpu_addr, proc_pdr.pdi_gtpu_addr4);
     seq_printf(s, "\t PDU GTPU Addr4: %s(%#08x)\n", pdu_gtpu_addr, ntohl(proc_pdr.pdi_gtpu_addr4));
     seq_printf(s, "\t FAR ID: %u\n", proc_pdr.far_id);
@@ -359,6 +363,8 @@ static ssize_t proc_pdr_write(struct file *filp, const char __user *buffer,
             proc_pdr.pdi_fteid = pdr->pdi->f_teid->teid;
             proc_pdr.pdi_gtpu_addr4 = pdr->pdi->f_teid->gtpu_addr_ipv4.s_addr;
         }
+        if (pdr->pdi->mulcst_igmp_addr_ipv4)
+            proc_pdr.pdi_mulcst_igmp_addr4= pdr->pdi->mulcst_igmp_addr_ipv4->s_addr;
     }
 
     if (pdr->far_id)

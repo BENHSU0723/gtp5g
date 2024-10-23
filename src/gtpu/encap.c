@@ -335,19 +335,6 @@ static int gtp1u_udp_encap_recv(struct gtp5g_dev *gtp, struct sk_buff *skb)
     return gtp5g_rx(pdr, skb, hdrlen, gtp->role);
 }
 
-static int gtp5g_drop_skb_encap(struct sk_buff *skb, struct net_device *dev, 
-    struct pdr *pdr)
-{
-    struct gtpv1_hdr *gtp1 = (struct gtpv1_hdr *)(skb->data + sizeof(struct udphdr));
-    if (gtp1->type == GTPV1_MSG_TYPE_TPDU) {
-        pdr->ul_drop_cnt++;
-        GTP5G_INF(NULL, "PDR (%u) UL_DROP_CNT (%llu)", pdr->id, pdr->ul_drop_cnt);
-    }
-    
-    // release skb in outer function
-    return PKT_DROPPED;
-}
-
 static int gtp5g_buf_skb_encap(struct sk_buff *skb, struct net_device *dev, 
     unsigned int hdrlen, struct pdr *pdr, struct far *far)
 {
@@ -641,7 +628,14 @@ int update_urr_counter_and_send_report(struct pdr *pdr, struct far *far, u64 vol
                         GTP5G_INF(NULL, "URR (%u) Quota Exhaust, stop measure", urr->id);
                     }
                 }
-            }
+            } else if(urr->method & URR_METHOD_EVENT ){
+                //for 5glan-multicast igmp event report(igmp join) used
+                if (urr->trigger==URR_RPT_TRIGGER_IPMJL && uplink){
+                    triggers[report_num] = URR_RPT_TRIGGER_IPMJL;
+                    urrs[report_num++] = urr;
+                    GTP5G_WAR(NULL, "Get the IGMP Join (%u) report, multicast group addr(%u)",urr->id, pdr->pdi->mulcst_igmp_addr_ipv4);
+                }
+            } 
         } else {
             GTP5G_TRC(pdr->dev, "URR stop measurement");
         }
@@ -663,6 +657,7 @@ int update_urr_counter_and_send_report(struct pdr *pdr, struct far *far, u64 vol
             convert_urr_to_report(urrs[i], &report[i]);
 
             report[i].trigger = triggers[i];
+            GTP5G_INF(NULL,"get the report trigger of index[%d], trigger[0x%06x]",i,triggers[i]);
         }
 
         if (pdr_addr_is_netlink(pdr)) {
@@ -693,6 +688,30 @@ err1:
     return ret;
 }
 
+static int gtp5g_drop_skb_encap(struct sk_buff *skb, struct net_device *dev, 
+    struct pdr *pdr, struct far *far)
+{
+    struct gtpv1_hdr *gtp1 = (struct gtpv1_hdr *)(skb->data + sizeof(struct udphdr));
+    if (gtp1->type == GTPV1_MSG_TYPE_TPDU) {
+        pdr->ul_drop_cnt++;
+        GTP5G_INF(NULL, "PDR (%u) UL_DROP_CNT (%llu)", pdr->id, pdr->ul_drop_cnt);
+    }
+
+    GTP5G_ERR(NULL,"enter gtp5g_drop_skb_encap()");
+    GTP5G_ERR(NULL,"urr count: %d",pdr->urr_num);
+    // used 5glan used to report igmp join message to smf 
+    if (pdr->urr_num != 0) {
+        u64 volume, volume_mbqe= 1;
+        GTP5G_ERR(NULL,"call update_urr_counter_and_send_report()");
+        if (update_urr_counter_and_send_report(pdr, far, volume, volume_mbqe, true) < 0)
+            GTP5G_ERR(NULL, "Fail to send Usage Report");
+        GTP5G_ERR(NULL,"got URR report of drop FAR of IGMP");
+    }
+    
+    // release skb in outer function
+    return PKT_DROPPED;
+}
+
 static int gtp5g_rx(struct pdr *pdr, struct sk_buff *skb,
     unsigned int hdrlen, unsigned int role)
 {
@@ -713,7 +732,7 @@ static int gtp5g_rx(struct pdr *pdr, struct sk_buff *skb,
         // The DUPL flag may be set with any of the DROP, FORW, BUFF and NOCP flags.
         switch(far->action & FAR_ACTION_MASK) {
         case FAR_ACTION_DROP:
-            rt = gtp5g_drop_skb_encap(skb, pdr->dev, pdr);
+            rt = gtp5g_drop_skb_encap(skb, pdr->dev, pdr, far);
             break;
         case FAR_ACTION_FORW:
             rt = gtp5g_fwd_skb_encap(skb, pdr->dev, hdrlen, pdr, far);
@@ -855,10 +874,10 @@ static int gtp5g_fwd_skb_encap(struct sk_buff *skb, struct net_device *dev,
     pdr->ul_byte_cnt += skb->len; /* length without GTP header */
     GTP5G_INF(NULL, "PDR (%u) UL_PKT_CNT (%llu) UL_BYTE_CNT (%llu)", pdr->id, pdr->ul_pkt_cnt, pdr->ul_byte_cnt);    
  
-    // if (pdr->urr_num != 0) {
-    //     if (update_urr_counter_and_send_report(pdr, far, volume, volume_mbqe, true) < 0)
-    //         GTP5G_ERR(pdr->dev, "Fail to send Usage Report");
-    // }
+    if (pdr->urr_num != 0) {
+        if (update_urr_counter_and_send_report(pdr, far, volume, volume_mbqe, true) < 0)
+            GTP5G_ERR(pdr->dev, "Fail to send Usage Report");
+    }
     
     if (color == Red) {
         GTP5G_TRC(pdr->dev, "Drop red packet");

@@ -45,6 +45,7 @@ struct pdi {
     struct in_addr *ue_addr_ipv4;
     struct local_f_teid *f_teid;
     struct sdf_filter *sdf;
+    struct in_addr *mulcst_igmp_addr_ipv4;
 };
 
 #define QER_ID_SIZE sizeof(u32)

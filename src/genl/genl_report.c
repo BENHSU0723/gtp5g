@@ -259,8 +259,9 @@ int gtp5g_genl_fill_ur(struct sk_buff *skb, struct usage_report *report)
         return -EMSGSIZE;
 
     if (report->trigger) {
-        if (nla_put_be32(skb, GTP5G_UR_USAGE_REPORT_TRIGGER, report->trigger)) 
+        if (nla_put_be32(skb, GTP5G_UR_USAGE_REPORT_TRIGGER, report->trigger))
             return -EMSGSIZE;
+        GTP5G_INF(NULL,"get report trigger of usage report:0x%06x",report->trigger);
     }
 
     nla_nest_end(skb, nest_usage_report);

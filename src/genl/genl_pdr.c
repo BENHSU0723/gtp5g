@@ -547,6 +547,17 @@ static int parse_pdi(struct pdr *pdr, struct nlattr *a)
             return err;
     }
 
+    if (attrs[GTP5G_PDI_MULCST_ADDR_IPV4]) {
+        if (!pdi->mulcst_igmp_addr_ipv4) {
+            pdi->mulcst_igmp_addr_ipv4 = kzalloc(sizeof(*pdi->mulcst_igmp_addr_ipv4), GFP_ATOMIC);
+            if (!pdi->mulcst_igmp_addr_ipv4)
+                return -ENOMEM;
+        }
+        pdi->mulcst_igmp_addr_ipv4->s_addr = nla_get_be32(attrs[GTP5G_PDI_MULCST_ADDR_IPV4]);
+
+        ip_string(ip_str, pdi->mulcst_igmp_addr_ipv4->s_addr);
+    }
+
     return 0;
 }
 
@@ -871,6 +882,11 @@ static int gtp5g_genl_fill_pdi(struct sk_buff *skb, struct pdi *pdi)
 
     if (pdi->sdf) {
         if (gtp5g_genl_fill_sdf(skb, pdi->sdf))
+            return -EMSGSIZE;
+    }
+
+    if (pdi->mulcst_igmp_addr_ipv4) {
+        if (nla_put_be32(skb, GTP5G_PDI_MULCST_ADDR_IPV4, pdi->mulcst_igmp_addr_ipv4->s_addr))
             return -EMSGSIZE;
     }
 
