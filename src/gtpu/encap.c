@@ -894,47 +894,26 @@ static int gtp5g_fwd_skb_encap(struct sk_buff *skb, struct net_device *dev,
 
         if (iph->saddr==server.s_addr){
             GTP5G_ERR(NULL,"find the source address from 10.60.0.1");
-            struct sk_buff *skb2;
-            struct iphdr *iph2;
-            skb2 = skb_copy(skb, GFP_ATOMIC); //GFP_KERNEL allows sleeping for resource, GFP_ATOMIC does not
-            // modify destination ip address to client address
-            // client-1 address: 10.60.0.2
-            struct in_addr client1;
-            client1.s_addr=(2 << 24) | (0 << 16) | (60 << 8) | 10;
-            iph->daddr=client1.s_addr;
-            GTP5G_ERR(NULL,"Transmit multicast packet to 1-th client of IP[10.60.0.2]");
-            // udp header reset
-            // struct udphdr *udph;   // Pointer to the UDP header
-            // udph = udp_hdr(skb);
-            // udph->check = 0;
-            // udph->check = udp_v4_check(skb->len - ip_hdrlen(skb), iph->saddr, iph->daddr, csum_partial(udph, skb->len - ip_hdrlen(skb), 0));
-            // ip header reset
-            iph->check=0;
-            iph->check = ip_fast_csum((unsigned char *)iph, iph->ihl);            
-
-
-            struct in_addr client2;
-            client2.s_addr=(3 << 24) | (0 << 16) | (60 << 8) | 10;
-            iph2 = ip_hdr(skb2);
-            iph2->daddr=client2.s_addr;
-            GTP5G_ERR(NULL,"Transmit multicast packet to 1-th client of IP[10.60.0.3]");
-            
-            // struct udphdr *udph2;   // Pointer to the UDP header
-            // udph2 = udp_hdr(skb2);
-            // modify dst udp port
-            // uint16_t new_dest_port = 7777;
-            // udph2->dest=htons(new_dest_port);
-            // udp header reset
-            // udph2->check = 0;
-            // udph2->check = udp_v4_check(skb2->len - ip_hdrlen(skb2), iph2->saddr, iph2->daddr, csum_partial(udph2, skb2->len - ip_hdrlen(skb2), 0));
-            // ip header reset
-            iph2->check=0;
-            iph2->check = ip_fast_csum((unsigned char *)iph2, iph2->ihl);
-            ret = netif_rx(skb2);
+            int client_cnt=20;
+            int i;
+            for (i=1;i<=client_cnt;i++) {
+                struct sk_buff *skb2;
+                struct iphdr *iph2;
+                skb2 = skb_copy(skb, GFP_ATOMIC); //GFP_KERNEL allows sleeping for resource, GFP_ATOMIC does not
+                struct in_addr client1;
+                client1.s_addr=(i+1 << 24) | (0 << 16) | (60 << 8) | 10;
+                iph2 = ip_hdr(skb2);
+                iph2->daddr=client1.s_addr;
+                // GTP5G_ERR(NULL,"Transmit multicast packet to 1-th client of IP[10.60.0.2]");
+                iph2->check=0;
+                iph2->check = ip_fast_csum((unsigned char *)iph2, iph2->ihl);
+                ret = netif_rx(skb2);
+            }
+            GTP5G_ERR(NULL,"Transmit multicast packet to %i UEs",client_cnt);
         }
     }
    
-    ret = netif_rx(skb);
+    // ret = netif_rx(skb);
     if (ret != NET_RX_SUCCESS) {
         GTP5G_ERR(dev, "Uplink: Packet got dropped\n");
     }
@@ -1002,11 +981,13 @@ static int gtp5g_fwd_skb_ipv4(struct sk_buff *skb,
     pdr->dl_byte_cnt += skb->len;
     GTP5G_INF(NULL, "PDR (%u) DL_PKT_CNT (%llu) DL_BYTE_CNT (%llu)", pdr->id, pdr->dl_pkt_cnt, pdr->dl_byte_cnt);
 
-    struct in_addr ue004;
-    struct in_addr ue005;
-    ue004.s_addr=(2 << 24) | (0 << 16) | (60 << 8) | 10;
-    ue005.s_addr=(3 << 24) | (0 << 16) | (60 << 8) | 10;
-    if ( iph->daddr==ue005.s_addr || iph->daddr==ue004.s_addr ){ //
+    __be32 ue_min_ip=2;
+    __be32 ue_max_ip=21;
+    __be32 client_ip=(iph->daddr) >> 24;
+    // struct in_addr ue005;
+    // ue004.s_addr=(2 << 24) | (0 << 16) | (60 << 8) | 10;
+    // ue005.s_addr=(3 << 24) | (0 << 16) | (60 << 8) | 10;
+    if ( client_ip>=ue_min_ip && client_ip<=ue_max_ip ){ //
         if(iph->protocol == IPPROTO_UDP){
             struct udphdr *udph;   // Pointer to the UDP header
             udph = udp_hdr(skb);

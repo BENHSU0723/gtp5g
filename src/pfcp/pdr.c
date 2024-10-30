@@ -306,37 +306,37 @@ struct pdr *pdr_find_by_gtp1u(struct gtp5g_dev *gtp, struct sk_buff *skb,
     #endif
 #endif
         if (pdi->ue_addr_ipv4)
-            if (!(pdr->af == AF_INET && target_addr && *target_addr == pdi->ue_addr_ipv4->s_addr)){
+            if (!(pdr->af == AF_INET && target_addr && *target_addr == pdi->ue_addr_ipv4->s_addr))
                 continue;
-            }else{
-                if(!(iph->protocol && iph->protocol==IPPROTO_IGMP && pdi->mulcst_igmp_addr_ipv4)){
-                    continue;
-                }else{
-                    GTP5G_ERR(NULL, "get IGMP packet" );
-                    struct igmpv3_report *igmph;
-                    // ip header of linux will read 20 bytes, but there is a option field of ip header will occupy addtional 4 bytes
-                    // so we cant use sizeof(struct iphdr), should used headr length of ip headr declare
-                    igmph = (struct igmpv3_report *)(skb->data + hdrlen + (iph->ihl)*4);
-                    GTP5G_INF(NULL,"ip header length: %d",(iph->ihl)*4);
-                    GTP5G_INF(NULL,"igmp type: %d",igmph->type);
-                    GTP5G_INF(NULL,"igmp resv1: %d",igmph->resv1);
-                    GTP5G_INF(NULL,"igmp csum: %d",igmph->csum);
-                    GTP5G_INF(NULL,"igmp resv2: %d",igmph->resv2);
-                    GTP5G_INF(NULL,"igmp ngrec: %d",igmph->ngrec);
-                    GTP5G_INF(NULL,"igmp group record 1(type): %d",igmph->grec->grec_type);
-                    GTP5G_INF(NULL,"igmp group record 1(grec_auxwords): %d",igmph->grec->grec_auxwords);
-                    GTP5G_INF(NULL,"igmp group record 1(grec_nsrcs): %d",igmph->grec->grec_nsrcs);
-                    GTP5G_INF(NULL,"igmp group record 1(grec_mca): %u",igmph->grec->grec_mca);
-                    GTP5G_INF(NULL,"igmp group record 1(grec_src): %u",igmph->grec->grec_src);
-                    uint32_t mulcstAddr=igmph->grec->grec_mca ;
-                    GTP5G_ERR(NULL, "multicast addr:0x%08x",pdi->mulcst_igmp_addr_ipv4->s_addr );
-                    GTP5G_ERR(NULL, "igmp addr:0x%08x",mulcstAddr );
-                    // TODO: only supprt igmp v3 now for 5glan-multicast used
-                    if (!(igmph->type==IGMPV3_HOST_MEMBERSHIP_REPORT && mulcstAddr==pdi->mulcst_igmp_addr_ipv4->s_addr))
-                        continue;
-                    GTP5G_ERR(NULL, "Match the IGMP packet, multicast addr:0x%08x",pdi->mulcst_igmp_addr_ipv4->s_addr );
-                }
-            }
+
+        if(iph->protocol && iph->protocol==IPPROTO_IGMP){
+            if (! pdi->mulcst_igmp_addr_ipv4)
+                continue;
+        
+            GTP5G_ERR(NULL, "get IGMP packet" );
+            struct igmpv3_report *igmph;
+            // ip header of linux will read 20 bytes, but there is a option field of ip header will occupy addtional 4 bytes
+            // so we cant use sizeof(struct iphdr), should used headr length of ip headr declare
+            igmph = (struct igmpv3_report *)(skb->data + hdrlen + (iph->ihl)*4);
+            GTP5G_INF(NULL,"ip header length: %d",(iph->ihl)*4);
+            GTP5G_INF(NULL,"igmp type: %d",igmph->type);
+            GTP5G_INF(NULL,"igmp resv1: %d",igmph->resv1);
+            GTP5G_INF(NULL,"igmp csum: %d",igmph->csum);
+            GTP5G_INF(NULL,"igmp resv2: %d",igmph->resv2);
+            GTP5G_INF(NULL,"igmp ngrec: %d",igmph->ngrec);
+            GTP5G_INF(NULL,"igmp group record 1(type): %d",igmph->grec->grec_type);
+            GTP5G_INF(NULL,"igmp group record 1(grec_auxwords): %d",igmph->grec->grec_auxwords);
+            GTP5G_INF(NULL,"igmp group record 1(grec_nsrcs): %d",igmph->grec->grec_nsrcs);
+            GTP5G_INF(NULL,"igmp group record 1(grec_mca): %u",igmph->grec->grec_mca);
+            GTP5G_INF(NULL,"igmp group record 1(grec_src): %u",igmph->grec->grec_src);
+            uint32_t mulcstAddr=igmph->grec->grec_mca ;
+            GTP5G_ERR(NULL, "multicast addr:0x%08x",pdi->mulcst_igmp_addr_ipv4->s_addr );
+            GTP5G_ERR(NULL, "igmp addr:0x%08x",mulcstAddr );
+            // TODO: only supprt igmp v3 now for 5glan-multicast used
+            if (!(igmph->type==IGMPV3_HOST_MEMBERSHIP_REPORT && mulcstAddr==pdi->mulcst_igmp_addr_ipv4->s_addr))
+                continue;
+            GTP5G_ERR(NULL, "Match the IGMP packet, multicast addr:0x%08x",pdi->mulcst_igmp_addr_ipv4->s_addr );
+        }
 
         if (pdi->sdf)
             if (!sdf_filter_match(pdi->sdf, skb, hdrlen, GTP5G_SDF_FILTER_OUT))
